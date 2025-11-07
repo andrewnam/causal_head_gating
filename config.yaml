@@ -1,0 +1,4 @@
+directories:
+  repo: /home/an0320/projects/causal_head_gating
+  huggingface: /scratch/gpfs/JDC/andrew/huggingface
+  save: /scratch/gpfs/JDC/andrew/chg
