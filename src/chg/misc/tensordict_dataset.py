@@ -1,11 +1,5 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
-from .tensordict import TensorDict
-
-
-import torch
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from .tensordict import TensorDict
 
 
@@ -95,41 +89,6 @@ class MaskedSequenceDataset(TensorDictDataset):
         return batch
         
 
-# class MaskedSequenceDataset(TensorDictDataset):
-#     """
-#     Dataset for padded, variable-length sequences (single input/output), auto-truncates batch fields by pad_token_id.
-
-#     Args:
-#         pad_token_id (int): Token ID used for padding (required).
-#         pad_right (bool): If True, truncates from the right (default). If False, truncates from the left.
-#         **kwargs: Named tensors (must include input_ids).
-
-#     Methods:
-#         collate_fn(batch): Pads/truncates all fields with 2nd dim matching input_ids.
-#     """
-#     def __init__(self, pad_token_id, pad_right=True, **kwargs):
-#         if 'input_ids' not in kwargs:
-#             raise Exception("MaskedSequenceDataset requires input_ids")
-#         super().__init__(**kwargs)
-#         self.pad_token_id = pad_token_id
-#         self.pad_right = pad_right
-
-#     def collate_fn(self, batch):
-#         batch = TensorDict.stack(batch)
-#         tokens = batch["input_ids"]
-#         if self.pad_right:
-#             idx = (tokens == tokenizer.pad_token_id).all(0).byte().argmax(-1)
-#             for k in batch:
-#                 if batch[k].ndim == 2 and batch[k].shape[1] == tokens.shape[1]:
-#                     batch[k] = batch[k][:, :idx]
-#         else:
-#             idx = (tokens == self.pad_token_id).all(0).byte().argmin(-1)
-#             for k in batch:
-#                 if batch[k].ndim == 2 and batch[k].shape[1] == tokens.shape[1]:
-#                     batch[k] = batch[k][:, idx:]
-#         return batch
-
-
 class ContrastiveMaskedSequenceDataset(TensorDictDataset):
     """
     Dataset for contrastive learning (positive/negative pairs), truncates each set independently by pad_token_id.
@@ -153,6 +112,17 @@ class ContrastiveMaskedSequenceDataset(TensorDictDataset):
                 raise Exception(f"{field} is required")
         super().__init__(**kwargs)
         self.pad_token_id = pad_token_id
+
+    def map(self, f):
+        tensors = {}
+        for k, v in self._dict.items():
+            if isinstance(v, TensorDict):
+                tensors[k] = v.map(f)
+            elif isinstance(v, torch.Tensor):
+                tensors[k] = f(v)
+            else:
+                raise TypeError(f"Cannot apply map to non-tensor field '{k}' of type {type(v)}")
+        return self.__class__(self.pad_token_id, **tensors)
 
     def collate_fn(self, batch):
         batch = TensorDict.stack(batch)
